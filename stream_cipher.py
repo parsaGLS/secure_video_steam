@@ -11,8 +11,11 @@ def _validate_seed(seed: int) -> None:
 
 def _next_bit(state: int) -> tuple[int, int]:
     """Return output bit and next state for x^16 + x^14 + x^13 + x^11 + 1."""
-    # TODO(student 1): replace this reference state transition in the handout.
-    pass
+    # taps for x^16 + x^14 + x^13 + x^11 + 1 (fibonacci form) -> bits 0, 2, 3, 5
+    out = state & 1
+    fb = (state ^ (state >> 2) ^ (state >> 3) ^ (state >> 5)) & 1
+    state = (state >> 1) | (fb << 15)
+    return out, state
 
 
 def keystream(length: int, seed: int, offset: int = 0) -> bytes:
@@ -23,11 +26,26 @@ def keystream(length: int, seed: int, offset: int = 0) -> bytes:
     if not isinstance(offset, int) or offset < 0:
         raise ValueError("offset must be a non-negative integer")
 
-    # TODO(student 2): replace this reference generator in the handout.
-    pass
+    # the lfsr is maximal so the bit sequence repeats every 65535 bits.
+    # no need to step offset*8 times, only the remainder matters
+    state = seed
+    for _ in range((offset * 8) % LFSR_PERIOD_BITS):
+        _, state = _next_bit(state)
+
+    out = bytearray(length)
+    for i in range(length):
+        byte = 0
+        for _ in range(8):
+            bit, state = _next_bit(state)
+            byte = (byte << 1) | bit  # first bit ends up as the MSB
+        out[i] = byte
+    return bytes(out)
 
 
 def xor_bytes(data: bytes, seed: int, offset: int = 0) -> bytes:
     """Encrypt or decrypt data with the keystream at absolute byte offset."""
-    # TODO(student 3): replace this reference XOR operation in the handout.
-    pass
+    data = bytes(data)
+    ks = keystream(len(data), seed, offset)
+    # xor the whole thing as one big integer, much faster than a python loop
+    x = int.from_bytes(data, "big") ^ int.from_bytes(ks, "big")
+    return x.to_bytes(len(data), "big")
